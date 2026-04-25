@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     to: user.email!,
     subject: emailContent.subject,
     html: emailContent.html,
-    cc: ADMIN_EMAIL ? [ADMIN_EMAIL] : [],
+    bcc: ADMIN_EMAIL ? [ADMIN_EMAIL] : [],
   });
 
   return NextResponse.json({

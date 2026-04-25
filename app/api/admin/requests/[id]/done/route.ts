@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient, createSupabaseAdminClient } from "@/lib/supabase/supabase-server";
-import { sendEmail, requestReadyEmail } from "@/lib/services/email.service";
+import { sendEmail, requestReadyEmail, ADMIN_EMAIL } from "@/lib/services/email.service";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DB = any;
@@ -67,7 +67,7 @@ export async function POST(
         adminNotes:    admin_notes?.trim() || null,
         appUrl,
       });
-      await sendEmail({ to: ownerEmail, subject, html });
+      await sendEmail({ to: ownerEmail, subject, html, bcc: ADMIN_EMAIL ? [ADMIN_EMAIL] : [] });
     }
   } catch { /* non-fatal */ }
 

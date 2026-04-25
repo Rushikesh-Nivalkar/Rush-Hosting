@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient, createSupabaseAdminClient } from "@/lib/supabase/supabase-server";
-import { sendEmail, hostingWelcomeEmail } from "@/lib/services/email.service";
+import { sendEmail, hostingWelcomeEmail, ADMIN_EMAIL } from "@/lib/services/email.service";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DB = any;
@@ -73,13 +73,13 @@ export async function POST(
     domain: site.domain,
     hostingUsername: site.hosting_username,
     hostingPassword: password,
-    panelHost: process.env.DREAMIT_SERVER_HOST ?? "",
-    panelPort: process.env.DREAMIT_SERVER_PORT ?? "2222",
-    ns1: process.env.DREAMIT_NS1 ?? "",
-    ns2: process.env.DREAMIT_NS2 ?? "",
+    panelHost: process.env.PANEL_HOST ?? "",
+    panelPort: process.env.PANEL_PORT ?? "2222",
+    ns1: process.env.NS1 ?? "",
+    ns2: process.env.NS2 ?? "",
   });
 
-  await sendEmail({ to: customerEmail, subject: email.subject, html: email.html });
+  await sendEmail({ to: customerEmail, subject: email.subject, html: email.html, bcc: ADMIN_EMAIL ? [ADMIN_EMAIL] : [] });
 
   // Update stored password and mark site active
   await db

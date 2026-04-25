@@ -45,7 +45,7 @@ export async function PATCH(
     const customerEmail = customerUser?.email;
     if (customerEmail) {
       const mail = siteActivatedEmail({ domain: site.domain, customerEmail });
-      await sendEmail({ to: customerEmail, subject: mail.subject, html: mail.html });
+      await sendEmail({ to: customerEmail, subject: mail.subject, html: mail.html, bcc: ADMIN_EMAIL ? [ADMIN_EMAIL] : [] });
     }
   } catch { /* non-fatal */ }
 
