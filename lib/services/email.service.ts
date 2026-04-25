@@ -6,7 +6,7 @@
 
 import nodemailer from "nodemailer";
 
-const FROM = process.env.EMAIL_FROM ?? "RushHosting <noreply@rushhosting.com.au>";
+const FROM = process.env.EMAIL_FROM ?? "RushHosting <noreply@rushhosting.au>";
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "";
 
 interface Attachment {
