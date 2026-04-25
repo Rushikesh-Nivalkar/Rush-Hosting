@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "Bash(timeout 8)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\naira\\Projects\\Hosting-Reseller\\app"
+    ]
+  }
+}
