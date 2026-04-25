@@ -7,7 +7,7 @@ export default async function SitesPage() {
 
   const { data: sites } = await db
     .from("sites")
-    .select("id, domain, status, hosting_username, hosting_password, plan_name, owner_id, created_at")
+    .select("id, domain, status, plan_name, owner_id, created_at")
     .order("created_at", { ascending: false });
 
   // Fetch customer emails from Auth
@@ -21,8 +21,6 @@ export default async function SitesPage() {
     id: string;
     domain: string;
     status: string;
-    hosting_username: string | null;
-    hosting_password: string | null;
     plan_name: string | null;
     owner_id: string;
     created_at: string;
@@ -30,8 +28,6 @@ export default async function SitesPage() {
     id: s.id,
     domain: s.domain,
     status: s.status,
-    hosting_username: s.hosting_username,
-    hosting_password: s.hosting_password,
     plan_name: s.plan_name,
     customer_email: emailMap.get(s.owner_id) ?? "—",
     created_at: s.created_at,

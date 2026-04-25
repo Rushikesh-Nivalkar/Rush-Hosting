@@ -60,8 +60,9 @@ export default async function DashboardPage() {
   const site: SiteRow | null = sitesRes.data?.[0] ?? null;
   const subscription: SubscriptionRow | null = subRes.data ?? null;
 
-  const renewalLabel = site?.renewal_date
-    ? new Date(site.renewal_date).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+  const renewalDate = site?.renewal_date ?? subscription?.current_period_end ?? null;
+  const renewalLabel = renewalDate
+    ? new Date(renewalDate).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
     : "—";
   const planLabel = subscription?.plan_name ?? site?.plan_name ?? "No active plan";
   const amountLabel = subscription?.amount_aud ? `${formatAUD(subscription.amount_aud)}/mo` : "—";

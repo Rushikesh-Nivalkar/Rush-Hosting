@@ -451,4 +451,42 @@ export function adminUserDeletionEmail({
   };
 }
 
+export function siteActivatedEmail({
+  domain,
+  customerEmail,
+}: {
+  domain: string;
+  customerEmail: string;
+}) {
+  return {
+    subject: `Your site ${domain} is now live!`,
+    html: `
+<!DOCTYPE html>
+<html>
+<body style="font-family:-apple-system,sans-serif;color:#1a1a2e;max-width:560px;margin:0 auto;padding:40px 20px;">
+  <div style="margin-bottom:32px;">
+    <strong style="font-size:18px;">RushHosting</strong>
+  </div>
+
+  <h2 style="font-size:20px;font-weight:600;margin-bottom:8px;">Your site is live 🎉</h2>
+  <p style="color:#6b7280;margin-bottom:24px;">
+    Hi there, great news — your site at <strong>${domain}</strong> has been connected and is now live.
+  </p>
+
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-bottom:24px;">
+    <p style="margin:0;font-size:14px;color:#166534;">
+      <strong>${domain}</strong> is now pointing to your hosting account and should be accessible shortly.
+      DNS changes can take up to 24 hours to fully propagate worldwide.
+    </p>
+  </div>
+
+  <p style="color:#6b7280;font-size:13px;">Questions? Reply to this email and we'll help you out.</p>
+
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin:32px 0;">
+  <p style="font-size:11px;color:#9ca3af;">RushHosting &mdash; Australian Web Hosting</p>
+</body>
+</html>`,
+  };
+}
+
 export { ADMIN_EMAIL };
