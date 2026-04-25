@@ -10,10 +10,10 @@ export default async function ClientsPage() {
     .select("id, full_name, created_at")
     .eq("role", "client");
 
-  // Fetch all subscriptions (to determine active status + plan)
+  // Fetch all subscriptions (to determine active status + plan + time buckets)
   const { data: subscriptions } = await db
     .from("subscriptions")
-    .select("owner_id, plan_name, status");
+    .select("owner_id, plan_name, status, lumpsum_minutes_total, lumpsum_minutes_used, weekly_minutes_total, weekly_minutes_used");
 
   // Fetch emails from Supabase Auth (service role required)
   let emailMap = new Map<string, string>();
@@ -22,11 +22,19 @@ export default async function ClientsPage() {
     emailMap = new Map(users.map((u: { id: string; email?: string }) => [u.id, u.email ?? ""]));
   } catch { /* silently skip if unavailable */ }
 
-  type SubInfo = { plan_name: string | null; status: string };
+  type SubInfo = {
+    plan_name: string | null; status: string;
+    lumpsum_minutes_total: number; lumpsum_minutes_used: number;
+    weekly_minutes_total: number; weekly_minutes_used: number;
+  };
   const subMap = new Map<string, SubInfo>(
-    (subscriptions ?? []).map((s: { owner_id: string; plan_name: string | null; status: string }) => [
+    (subscriptions ?? []).map((s: SubInfo & { owner_id: string }) => [
       s.owner_id,
-      { plan_name: s.plan_name, status: s.status },
+      { plan_name: s.plan_name, status: s.status,
+        lumpsum_minutes_total: s.lumpsum_minutes_total ?? 0,
+        lumpsum_minutes_used:  s.lumpsum_minutes_used  ?? 0,
+        weekly_minutes_total:  s.weekly_minutes_total  ?? 0,
+        weekly_minutes_used:   s.weekly_minutes_used   ?? 0 },
     ])
   );
 
@@ -44,6 +52,10 @@ export default async function ClientsPage() {
       plan_name: sub?.plan_name ?? null,
       status: sub?.status ?? null,
       joined: p.created_at,
+      lumpsum_minutes_total: sub?.lumpsum_minutes_total ?? 0,
+      lumpsum_minutes_used:  sub?.lumpsum_minutes_used  ?? 0,
+      weekly_minutes_total:  sub?.weekly_minutes_total  ?? 0,
+      weekly_minutes_used:   sub?.weekly_minutes_used   ?? 0,
     };
 
     if (sub && ACTIVE_STATUSES.has(sub.status)) {

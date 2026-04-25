@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Copy, CheckCheck, ExternalLink, Trash2, AlertTriangle, X, Loader2 } from "lucide-react";
+import { Mail, Copy, CheckCheck, ExternalLink, Trash2, AlertTriangle, X, Loader2, Clock } from "lucide-react";
 import { GlassCard } from "@/components/shared/GlassCard";
 
 export interface ClientRow {
@@ -11,6 +11,10 @@ export interface ClientRow {
   plan_name: string | null;
   status: string | null;
   joined: string;
+  lumpsum_minutes_total: number;
+  lumpsum_minutes_used: number;
+  weekly_minutes_total: number;
+  weekly_minutes_used: number;
 }
 
 function CopyButton({ emails }: { emails: string[] }) {
@@ -50,12 +54,123 @@ function BccButton({ emails, subject }: { emails: string[]; subject: string }) {
   );
 }
 
+function fmtMins(m: number) {
+  if (m <= 0) return "0 min";
+  const h = Math.floor(m / 60);
+  const mins = m % 60;
+  if (h === 0) return `${mins} min`;
+  if (mins === 0) return `${h} hr`;
+  return `${h} hr ${mins} min`;
+}
+
+function EditBucketsModal({
+  client,
+  onSaved,
+  onClose,
+}: {
+  client: ClientRow;
+  onSaved: (id: string, lumpsum: number, weekly: number) => void;
+  onClose: () => void;
+}) {
+  const lumpsumHrs = client.lumpsum_minutes_total > 0 ? String(client.lumpsum_minutes_total / 60) : "";
+  const weeklyHrs  = client.weekly_minutes_total  > 0 ? String(client.weekly_minutes_total  / 60) : "";
+
+  const [lumpInput, setLumpInput] = useState(lumpsumHrs);
+  const [weekInput, setWeekInput] = useState(weeklyHrs);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const inputClass = "w-full px-3 py-2 rounded-[var(--radius-md)] bg-[var(--bg-input)] border border-[var(--border-default)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--brand-primary)] transition-colors";
+  const labelClass = "block text-xs font-medium text-[var(--text-secondary)] mb-1";
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    const lumpMins = lumpInput ? Math.round(parseFloat(lumpInput) * 60) : 0;
+    const weekMins = weekInput ? Math.round(parseFloat(weekInput) * 60) : 0;
+
+    const res = await fetch(`/api/admin/clients/${client.id}/buckets`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lumpsum_minutes_total: lumpMins, weekly_minutes_total: weekMins }),
+    });
+    const json = await res.json();
+    setSaving(false);
+    if (json.ok) {
+      onSaved(client.id, lumpMins, weekMins);
+      onClose();
+    } else {
+      setError(json.error ?? "Failed to save.");
+    }
+  }
+
+  const usedLump = fmtMins(client.lumpsum_minutes_used);
+  const usedWeek = fmtMins(client.weekly_minutes_used);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-[var(--bg-card)] border border-[var(--border-default)] rounded-[var(--radius-xl)] p-6 max-w-sm w-full shadow-2xl">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-base font-semibold text-[var(--text-primary)]">Edit support time</h3>
+            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">{client.email}</p>
+          </div>
+          <button onClick={onClose} className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className={labelClass}>Setup bucket (hours total)</label>
+            <input type="number" value={lumpInput} onChange={(e) => setLumpInput(e.target.value)} min="0" step="0.5" placeholder="e.g. 40" className={inputClass} />
+            {client.lumpsum_minutes_used > 0 && (
+              <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">{usedLump} already used — reducing below this will set remaining to 0.</p>
+            )}
+          </div>
+          <div>
+            <label className={labelClass}>Weekly hours (resets Monday)</label>
+            <input type="number" value={weekInput} onChange={(e) => setWeekInput(e.target.value)} min="0" step="0.5" placeholder="e.g. 1" className={inputClass} />
+            {client.weekly_minutes_used > 0 && (
+              <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">{usedWeek} used this week.</p>
+            )}
+          </div>
+
+          {error && (
+            <p className="text-xs text-[var(--status-error)] flex items-center gap-1">
+              <AlertTriangle size={12} /> {error}
+            </p>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-[var(--radius-md)] bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] text-white text-sm font-medium transition-colors disabled:opacity-60"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : null}
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button onClick={onClose} className="px-4 py-2 rounded-[var(--radius-md)] bg-[var(--bg-elevated)] border border-[var(--border-default)] text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ClientTable({
   clients,
   onDelete,
+  onEditBuckets,
+  showBuckets,
 }: {
   clients: ClientRow[];
   onDelete: (c: ClientRow) => void;
+  onEditBuckets?: (c: ClientRow) => void;
+  showBuckets?: boolean;
 }) {
   if (clients.length === 0) {
     return (
@@ -88,6 +203,16 @@ function ClientTable({
             <span className="text-[10px] text-[var(--text-tertiary)] hidden md:block">
               {new Date(c.joined).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
             </span>
+            {showBuckets && onEditBuckets && (
+              <button
+                onClick={() => onEditBuckets(c)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-elevated)] hover:bg-[var(--bg-card-hover)] text-xs text-[var(--text-secondary)] transition-colors"
+                title="Edit support time buckets"
+              >
+                <Clock size={11} />
+                Time
+              </button>
+            )}
             <a
               href={`mailto:${c.email}`}
               className="flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-elevated)] hover:bg-[var(--bg-card-hover)] text-xs text-[var(--text-secondary)] transition-colors"
@@ -120,6 +245,13 @@ export function ClientsView({ active: initialActive, inactive: initialInactive }
   const [pendingDelete, setPendingDelete] = useState<ClientRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [editBuckets, setEditBuckets] = useState<ClientRow | null>(null);
+
+  function handleBucketsSaved(id: string, lumpsum: number, weekly: number) {
+    setActive((prev) => prev.map((c) =>
+      c.id === id ? { ...c, lumpsum_minutes_total: lumpsum, weekly_minutes_total: weekly } : c
+    ));
+  }
 
   const activeEmails = active.map((c) => c.email);
   const inactiveEmails = inactive.map((c) => c.email);
@@ -174,7 +306,7 @@ export function ClientsView({ active: initialActive, inactive: initialInactive }
             )}
           </div>
           <GlassCard padding="md">
-            <ClientTable clients={active} onDelete={setPendingDelete} />
+            <ClientTable clients={active} onDelete={setPendingDelete} onEditBuckets={setEditBuckets} showBuckets />
           </GlassCard>
         </div>
 
@@ -203,6 +335,15 @@ export function ClientsView({ active: initialActive, inactive: initialInactive }
           </GlassCard>
         </div>
       </div>
+
+      {/* ── Edit buckets modal ── */}
+      {editBuckets && (
+        <EditBucketsModal
+          client={editBuckets}
+          onSaved={handleBucketsSaved}
+          onClose={() => setEditBuckets(null)}
+        />
+      )}
 
       {/* ── Delete confirmation modal ── */}
       {pendingDelete && (
