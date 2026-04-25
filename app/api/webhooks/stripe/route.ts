@@ -83,7 +83,8 @@ export async function POST(req: NextRequest) {
         if (!userId) break;
 
         const sub = await stripe.subscriptions.retrieve(session.subscription as string);
-        await db.from("subscriptions").upsert(await subRow(sub, db, userId), { onConflict: "owner_id" });
+        const { error: upsertError } = await db.from("subscriptions").upsert(await subRow(sub, db, userId), { onConflict: "owner_id" });
+        if (upsertError) throw new Error(`Subscription upsert failed: ${upsertError.message}`);
         break;
       }
 
