@@ -2,50 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Globe, Loader2, CheckCircle2, Copy, Check, ArrowRight, Server, Mail } from "lucide-react";
+import { Globe, Loader2, CheckCircle2, ArrowRight, Mail } from "lucide-react";
 import { GlassCard } from "@/components/shared/GlassCard";
-
-type SetupResult = {
-  domain: string;
-  provisioned: boolean;
-  ns1: string | null;
-  ns2: string | null;
-};
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  function handleCopy() {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-  return (
-    <button
-      onClick={handleCopy}
-      className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
-      title="Copy"
-    >
-      {copied ? <Check size={13} className="text-[var(--status-active)]" /> : <Copy size={13} />}
-    </button>
-  );
-}
-
-function CredentialRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3 py-1.5">
-      <span className="text-xs text-[var(--text-tertiary)] w-28 shrink-0">{label}</span>
-      <span className="text-xs font-mono text-[var(--text-primary)] truncate flex-1">{value}</span>
-      <CopyButton text={value} />
-    </div>
-  );
-}
 
 export function DomainSetupForm() {
   const router = useRouter();
   const [domain, setDomain] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<SetupResult | null>(null);
+  const [submitted, setSubmitted] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -66,10 +31,10 @@ export function DomainSetupForm() {
       return;
     }
 
-    setResult(json.data);
+    setSubmitted(json.data.domain);
   }
 
-  if (result) {
+  if (submitted) {
     return (
       <div className="space-y-4">
         <GlassCard padding="lg">
@@ -77,36 +42,15 @@ export function DomainSetupForm() {
             <CheckCircle2 size={18} className="text-[var(--status-active)]" />
             <p className="text-sm font-semibold text-[var(--text-primary)]">Domain received!</p>
           </div>
-
           <p className="text-xs text-[var(--text-secondary)] mb-4">
-            We&apos;re setting up your hosting account for <strong>{result.domain}</strong>.
-            Once it&apos;s ready, we&apos;ll email you your login credentials.
+            We&apos;ve saved <strong>{submitted}</strong> and will get it connected shortly.
+            You&apos;ll hear from us once everything is live.
           </p>
-
           <div className="flex items-center gap-2 p-3 rounded-[var(--radius-md)] bg-[var(--brand-primary-muted)] border border-[var(--brand-primary)]/20 text-[var(--brand-primary)] text-xs">
             <Mail size={13} className="shrink-0" />
-            Check your inbox — we&apos;ve sent you nameserver details to point your domain to us.
+            Keep an eye on your inbox — we&apos;ll email you when your site is ready.
           </div>
         </GlassCard>
-
-        {(result.ns1 || result.ns2) && (
-          <GlassCard padding="lg">
-            <div className="flex items-center gap-2 mb-3">
-              <Server size={14} className="text-[var(--brand-primary)]" />
-              <p className="text-xs font-semibold text-[var(--text-primary)]">Point your domain to us</p>
-            </div>
-            <p className="text-xs text-[var(--text-secondary)] mb-3">
-              Log in to your domain registrar and update the nameservers to:
-            </p>
-            <div className="divide-y divide-[var(--border-default)]">
-              {result.ns1 && <CredentialRow label="Nameserver 1" value={result.ns1} />}
-              {result.ns2 && <CredentialRow label="Nameserver 2" value={result.ns2} />}
-            </div>
-            <p className="text-xs text-[var(--text-tertiary)] mt-3">
-              DNS changes can take up to 24–48 hours to propagate globally.
-            </p>
-          </GlassCard>
-        )}
 
         <button
           onClick={() => router.push("/dashboard")}
@@ -158,11 +102,11 @@ export function DomainSetupForm() {
           {loading ? (
             <>
               <Loader2 size={14} className="animate-spin" />
-              Setting up…
+              Submitting…
             </>
           ) : (
             <>
-              Set up hosting
+              Submit domain
               <ArrowRight size={14} />
             </>
           )}

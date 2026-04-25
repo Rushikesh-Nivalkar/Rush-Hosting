@@ -24,7 +24,7 @@ export default async function DomainSetupPage() {
       <div>
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">Set up your domain</h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Enter the domain you want to host. We&apos;ll create your hosting account and give you the nameservers to point it to us.
+          Enter the domain you want to use for your site. We&apos;ll take it from there.
         </p>
       </div>
       <DomainSetupForm />
