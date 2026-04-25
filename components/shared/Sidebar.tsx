@@ -29,6 +29,7 @@ import {
   Package,
   Wrench,
   MessageSquare,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/supabase/database.types";
@@ -59,6 +60,7 @@ const CLIENT_NAV: NavItem[] = [
   { label: "My Site",       href: "/dashboard", icon: Globe },
   { label: "Updates",       href: "/updates",   icon: MessageSquare },
   { label: "Billing",       href: "/billing",   icon: CreditCard },
+  { label: "Privacy",       href: "/privacy",   icon: Shield },
 ];
 
 const SHARED_BOTTOM_NAV: NavItem[] = [
