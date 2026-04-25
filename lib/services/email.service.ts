@@ -489,4 +489,133 @@ export function siteActivatedEmail({
   };
 }
 
+// ── Invoice receipt ───────────────────────────────────────────────────────────
+
+export function invoicePaidEmail({
+  invoiceNumber,
+  date,
+  customerEmail,
+  amountPaid,
+  lines,
+  invoiceUrl,
+}: {
+  invoiceNumber: string;
+  date: string;
+  customerEmail: string;
+  amountPaid: number;
+  lines: { description: string; amount: number; periodStart: string | null; periodEnd: string | null }[];
+  invoiceUrl: string | null;
+}) {
+  const fmt = (cents: number) =>
+    new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(cents / 100);
+
+  const lineRows = lines
+    .map(
+      (l) => `
+    <tr>
+      <td style="padding:14px 20px;border-bottom:1px solid #2a2a2a;font-size:13px;color:#f0f0f0;">
+        ${l.description}
+        ${l.periodStart && l.periodEnd
+          ? `<br><span style="font-size:11px;color:#8a8a8a;">${l.periodStart} – ${l.periodEnd}</span>`
+          : ""}
+      </td>
+      <td style="padding:14px 20px;border-bottom:1px solid #2a2a2a;font-size:13px;color:#f0f0f0;text-align:right;white-space:nowrap;">${fmt(l.amount)}</td>
+    </tr>`
+    )
+    .join("");
+
+  return {
+    subject: `Receipt from RushHosting — ${invoiceNumber}`,
+    html: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Receipt from RushHosting</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0f0f0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;-webkit-font-smoothing:antialiased;">
+  <div style="max-width:560px;margin:0 auto;padding:40px 20px;">
+
+    <!-- Header -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+      <tr>
+        <td>
+          <span style="font-size:18px;font-weight:700;color:#f0f0f0;letter-spacing:-0.3px;">RushHosting</span>
+        </td>
+        <td align="right">
+          <span style="display:inline-block;background:#4ade8022;border:1px solid #4ade8044;color:#4ade80;font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;letter-spacing:0.05em;text-transform:uppercase;">
+            Payment confirmed
+          </span>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Main card -->
+    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;overflow:hidden;margin-bottom:24px;">
+
+      <!-- Card header -->
+      <div style="padding:20px 20px 16px;border-bottom:1px solid #2a2a2a;">
+        <p style="margin:0 0 4px;font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;color:#555555;">Receipt</p>
+        <p style="margin:0;font-size:22px;font-weight:700;color:#f0f0f0;">${fmt(amountPaid)}</p>
+      </div>
+
+      <!-- Invoice meta -->
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:1px solid #2a2a2a;">
+        <tr>
+          <td style="padding:12px 20px;font-size:12px;color:#8a8a8a;border-bottom:1px solid #222222;width:130px;">Invoice number</td>
+          <td style="padding:12px 20px;font-size:13px;color:#f0f0f0;font-family:monospace;border-bottom:1px solid #222222;">${invoiceNumber}</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 20px;font-size:12px;color:#8a8a8a;border-bottom:1px solid #222222;">Date</td>
+          <td style="padding:12px 20px;font-size:13px;color:#f0f0f0;border-bottom:1px solid #222222;">${date}</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 20px;font-size:12px;color:#8a8a8a;">Billed to</td>
+          <td style="padding:12px 20px;font-size:13px;color:#f0f0f0;">${customerEmail}</td>
+        </tr>
+      </table>
+
+      <!-- Line items -->
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <th style="padding:10px 20px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:#555555;text-align:left;border-bottom:1px solid #2a2a2a;">Description</th>
+          <th style="padding:10px 20px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:#555555;text-align:right;border-bottom:1px solid #2a2a2a;">Amount</th>
+        </tr>
+        ${lineRows}
+        <!-- Total row -->
+        <tr style="background:#161616;">
+          <td style="padding:14px 20px;font-size:13px;font-weight:600;color:#f0f0f0;">Total paid</td>
+          <td style="padding:14px 20px;font-size:14px;font-weight:700;color:#5e6ad2;text-align:right;white-space:nowrap;">${fmt(amountPaid)}</td>
+        </tr>
+      </table>
+
+    </div>
+
+    <!-- GST note -->
+    <p style="margin:0 0 24px;font-size:12px;color:#555555;text-align:center;">
+      All prices are in AUD and include GST. This email serves as your tax invoice.
+    </p>
+
+    <!-- View invoice button -->
+    ${invoiceUrl
+      ? `<div style="text-align:center;margin-bottom:32px;">
+          <a href="${invoiceUrl}" style="display:inline-block;background:#5e6ad2;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;padding:11px 24px;border-radius:8px;">
+            View &amp; download invoice PDF
+          </a>
+        </div>`
+      : ""}
+
+    <!-- Footer -->
+    <div style="border-top:1px solid #222222;padding-top:24px;text-align:center;">
+      <p style="margin:0 0 4px;font-size:12px;color:#555555;">Questions? Reply to this email.</p>
+      <p style="margin:0;font-size:11px;color:#3a3a3a;">RushHosting &mdash; Australian Web Hosting</p>
+    </div>
+
+  </div>
+</body>
+</html>`,
+  };
+}
+
 export { ADMIN_EMAIL };

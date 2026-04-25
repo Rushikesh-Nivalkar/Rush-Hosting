@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe/stripe-helpers";
 import { createSupabaseAdminClient } from "@/lib/supabase/supabase-server";
+import { sendEmail, invoicePaidEmail } from "@/lib/services/email.service";
 import type Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -110,6 +111,39 @@ export async function POST(req: NextRequest) {
         if (!subRef) break;
         const subId = typeof subRef === "string" ? subRef : subRef.id;
         await db.from("subscriptions").update({ status: "past_due" }).eq("stripe_subscription_id", subId);
+        break;
+      }
+
+      case "invoice.paid": {
+        const invoice = event.data.object as Stripe.Invoice;
+        // Only send receipt for subscription invoices (skip setup/one-off)
+        if (!invoice.parent?.subscription_details?.subscription) break;
+
+        const toEmail = invoice.customer_email;
+        if (!toEmail) break;
+
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://rushhosting.au";
+        const { subject, html } = invoicePaidEmail({
+          invoiceNumber: invoice.number ?? `INV-${invoice.id.slice(-8).toUpperCase()}`,
+          date: new Date(invoice.created * 1000).toLocaleDateString("en-AU", {
+            day: "numeric", month: "long", year: "numeric",
+          }),
+          customerEmail: toEmail,
+          amountPaid: invoice.amount_paid,
+          lines: (invoice.lines?.data ?? []).map((line) => ({
+            description: line.description ?? "Hosting subscription",
+            amount: line.amount,
+            periodStart: line.period
+              ? new Date(line.period.start * 1000).toLocaleDateString("en-AU", { day: "numeric", month: "short" })
+              : null,
+            periodEnd: line.period
+              ? new Date(line.period.end * 1000).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+              : null,
+          })),
+          invoiceUrl: invoice.hosted_invoice_url ?? null,
+        });
+
+        await sendEmail({ to: toEmail, subject, html });
         break;
       }
 
