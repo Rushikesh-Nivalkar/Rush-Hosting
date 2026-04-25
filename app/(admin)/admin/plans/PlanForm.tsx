@@ -39,6 +39,8 @@ export function PlanForm({ clients, onCreated }: PlanFormProps) {
   const [features, setFeatures] = useState<string[]>([]);
   const [featureInput, setFeatureInput] = useState("");
   const [createdFor, setCreatedFor] = useState("");
+  const [lumpsumHours, setLumpsumHours] = useState("");
+  const [weeklyHours, setWeeklyHours] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,6 +79,8 @@ export function PlanForm({ clients, onCreated }: PlanFormProps) {
         price_aud: priceInCents,
         features,
         created_for: createdFor || undefined,
+        lumpsum_minutes: lumpsumHours ? Math.round(parseFloat(lumpsumHours) * 60) : 0,
+        weekly_minutes:  weeklyHours  ? Math.round(parseFloat(weeklyHours)  * 60) : 0,
       }),
     });
 
@@ -91,6 +95,8 @@ export function PlanForm({ clients, onCreated }: PlanFormProps) {
       setFeatures([]);
       setFeatureInput("");
       setCreatedFor("");
+      setLumpsumHours("");
+      setWeeklyHours("");
       setOpen(false);
     } else {
       setError(json.error?.message ?? "Failed to create package.");
@@ -227,6 +233,39 @@ export function PlanForm({ clients, onCreated }: PlanFormProps) {
             </p>
           </div>
         )}
+
+        {/* Time buckets */}
+        <div>
+          <label className={labelClass}>Support time — initial bucket (hours)</label>
+          <input
+            type="number"
+            value={lumpsumHours}
+            onChange={(e) => setLumpsumHours(e.target.value)}
+            min="0"
+            step="0.5"
+            placeholder="e.g. 40"
+            className={inputClass}
+          />
+          <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+            One-time setup hours. Does not expire until fully used by admin.
+          </p>
+        </div>
+
+        <div>
+          <label className={labelClass}>Support time — weekly recurring (hours)</label>
+          <input
+            type="number"
+            value={weeklyHours}
+            onChange={(e) => setWeeklyHours(e.target.value)}
+            min="0"
+            step="0.5"
+            placeholder="e.g. 1"
+            className={inputClass}
+          />
+          <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+            Resets every Monday. Unused hours do not carry over.
+          </p>
+        </div>
 
         {error && (
           <div className="flex items-center gap-2 p-3 rounded-[var(--radius-md)] bg-[var(--status-error-bg)] border border-[var(--status-error)]/20 text-[var(--status-error)] text-xs">

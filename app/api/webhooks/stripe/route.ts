@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe/stripe-helpers";
 import { createSupabaseAdminClient } from "@/lib/supabase/supabase-server";
 import { sendEmail, invoicePaidEmail } from "@/lib/services/email.service";
+import { getPlanBuckets, getMostRecentMonday } from "@/lib/time-buckets";
 import type Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -86,14 +87,37 @@ export async function POST(req: NextRequest) {
         if (!userId) break;
 
         const sub = await stripe.subscriptions.retrieve(session.subscription as string);
-        const { error: upsertError } = await db.from("subscriptions").upsert(await subRow(sub, db, userId), { onConflict: "owner_id" });
+        const row = await subRow(sub, db, userId);
+        const { error: upsertError } = await db.from("subscriptions").upsert(row, { onConflict: "owner_id" });
         if (upsertError) throw new Error(`Subscription upsert failed: ${upsertError.message}`);
+
+        // Set initial time buckets (only on new subscription — don't overwrite existing usage)
+        const buckets = await getPlanBuckets(row.stripe_price_id, db);
+        if (buckets && (buckets.lumpsum_minutes > 0 || buckets.weekly_minutes > 0)) {
+          await db.from("subscriptions")
+            .update({
+              lumpsum_minutes_total: buckets.lumpsum_minutes,
+              weekly_minutes_total:  buckets.weekly_minutes,
+              lumpsum_minutes_used:  0,
+              weekly_minutes_used:   0,
+              weekly_reset_at:       getMostRecentMonday().toISOString(),
+            })
+            .eq("owner_id", userId);
+        }
         break;
       }
 
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
-        await db.from("subscriptions").update(await subRow(sub, db)).eq("stripe_subscription_id", sub.id);
+        const row = await subRow(sub, db);
+        await db.from("subscriptions").update(row).eq("stripe_subscription_id", sub.id);
+        // Update weekly allocation if plan changed (lump sum untouched — it persists)
+        const buckets = await getPlanBuckets(row.stripe_price_id, db);
+        if (buckets) {
+          await db.from("subscriptions")
+            .update({ weekly_minutes_total: buckets.weekly_minutes })
+            .eq("stripe_subscription_id", sub.id);
+        }
         break;
       }
 

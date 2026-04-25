@@ -20,10 +20,11 @@ interface SendOptions {
   subject: string;
   html: string;
   cc?: string[];
+  bcc?: string[];
   attachments?: Attachment[];
 }
 
-export async function sendEmail({ to, subject, html, cc, attachments }: SendOptions) {
+export async function sendEmail({ to, subject, html, cc, bcc, attachments }: SendOptions) {
   if (!process.env.SMTP_HOST) {
     console.log(`[email] (no SMTP_HOST) To: ${to} | Subject: ${subject}`);
     return;
@@ -40,7 +41,7 @@ export async function sendEmail({ to, subject, html, cc, attachments }: SendOpti
   });
 
   try {
-    await transporter.sendMail({ from: FROM, to, subject, html, cc, attachments });
+    await transporter.sendMail({ from: FROM, to, subject, html, cc, bcc, attachments });
   } catch (err) {
     console.error("[email] Failed to send:", err);
   }
@@ -612,6 +613,151 @@ export function invoicePaidEmail({
       <p style="margin:0;font-size:11px;color:#3a3a3a;">RushHosting &mdash; Australian Web Hosting</p>
     </div>
 
+  </div>
+</body>
+</html>`,
+  };
+}
+
+// ── Request ready for review (admin → customer) ───────────────────────────────
+
+export function requestReadyEmail({
+  customerEmail,
+  requestTitle,
+  adminNotes,
+  appUrl,
+}: {
+  customerEmail: string;
+  requestTitle: string;
+  adminNotes: string | null;
+  appUrl: string;
+}) {
+  return {
+    subject: `Your request is ready for review — ${requestTitle}`,
+    html: `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="color-scheme" content="dark"></head>
+<body style="margin:0;padding:0;background-color:#0f0f0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;padding:40px 20px;">
+    <div style="margin-bottom:28px;">
+      <span style="font-size:18px;font-weight:700;color:#f0f0f0;">RushHosting</span>
+    </div>
+    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:24px;margin-bottom:20px;">
+      <p style="margin:0 0 6px;font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;color:#555555;">Work completed</p>
+      <p style="margin:0 0 16px;font-size:18px;font-weight:600;color:#f0f0f0;">${requestTitle}</p>
+      <p style="margin:0;font-size:13px;color:#8a8a8a;">
+        Hi ${customerEmail}, the work on your request has been completed and is ready for your review.
+      </p>
+      ${adminNotes ? `
+      <div style="margin-top:16px;padding:14px;background:#161616;border:1px solid #2a2a2a;border-radius:8px;">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#555555;">Notes from our team</p>
+        <p style="margin:0;font-size:13px;color:#f0f0f0;">${adminNotes}</p>
+      </div>` : ""}
+    </div>
+    <div style="text-align:center;margin-bottom:28px;">
+      <a href="${appUrl}/updates" style="display:inline-block;background:#5e6ad2;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;padding:11px 24px;border-radius:8px;">
+        Review &amp; confirm
+      </a>
+    </div>
+    <div style="border-top:1px solid #222222;padding-top:20px;">
+      <p style="margin:0;font-size:11px;color:#3a3a3a;text-align:center;">RushHosting &mdash; Australian Web Hosting</p>
+    </div>
+  </div>
+</body>
+</html>`,
+  };
+}
+
+// ── Request completed confirmation (customer marks done) ──────────────────────
+
+export function requestCompletedEmail({
+  customerEmail,
+  requestTitle,
+  requestDescription,
+  adminNotes,
+  minutesCharged,
+  lumpsumRemaining,
+  weeklyRemaining,
+}: {
+  customerEmail: string;
+  requestTitle: string;
+  requestDescription: string | null;
+  adminNotes: string | null;
+  minutesCharged: number;
+  lumpsumRemaining: number;
+  weeklyRemaining: number;
+}) {
+  const fmtMins = (m: number) => {
+    if (m <= 0) return "0 min";
+    const h = Math.floor(m / 60);
+    const mins = m % 60;
+    if (h === 0) return `${mins} min`;
+    if (mins === 0) return `${h} hr`;
+    return `${h} hr ${mins} min`;
+  };
+
+  return {
+    subject: `Request completed: ${requestTitle}`,
+    html: `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="color-scheme" content="dark"></head>
+<body style="margin:0;padding:0;background-color:#0f0f0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;padding:40px 20px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+      <tr>
+        <td><span style="font-size:18px;font-weight:700;color:#f0f0f0;">RushHosting</span></td>
+        <td align="right">
+          <span style="display:inline-block;background:#4ade8022;border:1px solid #4ade8044;color:#4ade80;font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;text-transform:uppercase;">
+            Completed
+          </span>
+        </td>
+      </tr>
+    </table>
+
+    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+      <div style="padding:20px;border-bottom:1px solid #2a2a2a;">
+        <p style="margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;color:#555555;">Request summary</p>
+        <p style="margin:0;font-size:18px;font-weight:600;color:#f0f0f0;">${requestTitle}</p>
+      </div>
+
+      ${requestDescription ? `
+      <div style="padding:16px 20px;border-bottom:1px solid #2a2a2a;">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#555555;">Description</p>
+        <p style="margin:0;font-size:13px;color:#8a8a8a;">${requestDescription}</p>
+      </div>` : ""}
+
+      ${adminNotes ? `
+      <div style="padding:16px 20px;border-bottom:1px solid #2a2a2a;">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#555555;">Team notes</p>
+        <p style="margin:0;font-size:13px;color:#f0f0f0;">${adminNotes}</p>
+      </div>` : ""}
+
+      <div style="padding:16px 20px;border-bottom:1px solid #2a2a2a;">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#555555;">Time charged</p>
+        <p style="margin:0;font-size:14px;font-weight:600;color:#5e6ad2;">${fmtMins(minutesCharged)}</p>
+      </div>
+
+      <div style="padding:16px 20px;">
+        <p style="margin:0 0 10px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#555555;">Remaining balance</p>
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="font-size:12px;color:#8a8a8a;padding-bottom:4px;">Support bucket</td>
+            <td align="right" style="font-size:13px;font-weight:600;color:#f0f0f0;padding-bottom:4px;">${fmtMins(lumpsumRemaining)}</td>
+          </tr>
+          <tr>
+            <td style="font-size:12px;color:#8a8a8a;">This week</td>
+            <td align="right" style="font-size:13px;font-weight:600;color:#f0f0f0;">${fmtMins(weeklyRemaining)}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <p style="margin:0 0 4px;font-size:12px;color:#555555;text-align:center;">
+      This email confirms you have marked this request as complete. The task record has been removed from your portal.
+    </p>
+    <div style="border-top:1px solid #222222;padding-top:20px;margin-top:24px;">
+      <p style="margin:0;font-size:11px;color:#3a3a3a;text-align:center;">RushHosting &mdash; Australian Web Hosting</p>
+    </div>
   </div>
 </body>
 </html>`,

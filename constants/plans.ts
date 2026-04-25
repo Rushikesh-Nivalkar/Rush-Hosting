@@ -68,6 +68,14 @@ export type PlanId = (typeof PLANS)[keyof typeof PLANS]["id"];
 /** Ordered from lowest to highest tier — used for minimum-plan enforcement */
 export const PLAN_ORDER: PlanId[] = ["hosting", "basic", "advanced"];
 
+/** Time buckets for plans that include website support.
+ *  hosting has no allocation. basic = 40 hrs lump + 1 hr/week.
+ *  advanced = 80 hrs lump + 2 hrs/week. All values in minutes. */
+export const PLAN_TIME_BUCKETS: Partial<Record<PlanId, { lumpsum_minutes: number; weekly_minutes: number }>> = {
+  basic:    { lumpsum_minutes: 40 * 60,  weekly_minutes: 60  },
+  advanced: { lumpsum_minutes: 80 * 60,  weekly_minutes: 120 },
+};
+
 export function getPlanRank(planId: PlanId): number {
   return PLAN_ORDER.indexOf(planId);
 }

@@ -41,12 +41,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, description, price_aud, features, created_for } = body as {
+    const { name, description, price_aud, features, created_for, lumpsum_minutes, weekly_minutes } = body as {
       name?: string;
       description?: string;
-      price_aud?: number;   // AUD cents
+      price_aud?: number;         // AUD cents
       features?: string[];
-      created_for?: string; // profile UUID
+      created_for?: string;       // profile UUID
+      lumpsum_minutes?: number;   // initial support bucket in minutes
+      weekly_minutes?: number;    // weekly recurring minutes
     };
 
     if (!name?.trim()) {
@@ -90,6 +92,8 @@ export async function POST(req: NextRequest) {
         stripe_price_id: price.id,
         created_for: created_for || null,
         created_by: user.id,
+        lumpsum_minutes: lumpsum_minutes ?? 0,
+        weekly_minutes:  weekly_minutes  ?? 0,
       })
       .select()
       .single();

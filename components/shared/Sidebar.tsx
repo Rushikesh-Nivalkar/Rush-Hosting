@@ -29,6 +29,8 @@ import {
   Tag,
   Link2,
   Package,
+  Wrench,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/supabase/database.types";
@@ -46,6 +48,7 @@ interface NavItem {
 
 const ADMIN_NAV: NavItem[] = [
   { label: "Master Feed",   href: "/admin",              icon: Inbox },
+  { label: "Requests",      href: "/admin/requests",     icon: Wrench },
   { label: "Revenue",       href: "/admin/revenue",      icon: TrendingUp },
   { label: "Clients",       href: "/admin/clients",      icon: Users },
   { label: "Sites",         href: "/admin/sites",        icon: Globe },
@@ -55,8 +58,9 @@ const ADMIN_NAV: NavItem[] = [
 ];
 
 const CLIENT_NAV: NavItem[] = [
-  { label: "My Site",  href: "/dashboard", icon: Globe },
-  { label: "Billing",  href: "/billing",   icon: CreditCard },
+  { label: "My Site",       href: "/dashboard", icon: Globe },
+  { label: "Updates",       href: "/updates",   icon: MessageSquare },
+  { label: "Billing",       href: "/billing",   icon: CreditCard },
 ];
 
 const SHARED_BOTTOM_NAV: NavItem[] = [
