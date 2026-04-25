@@ -26,7 +26,7 @@ export default function PrivacyPage() {
       <div>
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">Privacy Policy</h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Last updated: April 2026 &mdash; Rushikesh Vinod Nivalkar (Sole Trader) &mdash; ABN: [YOUR ABN]
+          Last updated: April 2026 &mdash; Rushikesh Vinod Nivalkar (Sole Trader) &mdash; ABN: 89 891 159 601
         </p>
       </div>
 
