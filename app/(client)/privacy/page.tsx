@@ -26,14 +26,26 @@ export default function PrivacyPage() {
       <div>
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">Privacy Policy</h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Last updated: April 2026 &mdash; RushHosting (ABN pending)
+          Last updated: April 2026 &mdash; Rushikesh Vinod Nivalkar (Sole Trader) &mdash; ABN: [YOUR ABN]
         </p>
       </div>
 
-      <Section title="Overview">
+      <Section title="About RushHosting">
         <p>
-          RushHosting (&ldquo;we&rdquo;, &ldquo;us&rdquo;) is committed to protecting your personal
-          information in accordance with the{" "}
+          RushHosting is a web development and hosting service operated by{" "}
+          <strong className="text-[var(--text-primary)]">Rushikesh Vinod Nivalkar</strong>, a sole trader
+          registered in Australia. Through RushHosting, Rushikesh provides clients with managed website
+          hosting, ongoing site maintenance, and technical support services.
+        </p>
+        <p>
+          When this policy refers to &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;RushHosting&rdquo;,
+          it refers to Rushikesh Vinod Nivalkar operating under that trading name.
+        </p>
+      </Section>
+
+      <Section title="Privacy commitment">
+        <p>
+          We are committed to protecting your personal information in accordance with the{" "}
           <strong className="text-[var(--text-primary)]">Privacy Act 1988 (Cth)</strong> and the{" "}
           <strong className="text-[var(--text-primary)]">Australian Privacy Principles (APPs)</strong>.
           This policy explains what data we collect, why we collect it, how it is stored, and your rights.
