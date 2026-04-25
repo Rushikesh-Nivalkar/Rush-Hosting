@@ -1,0 +1,544 @@
+# RushHosting — Full Documentation
+
+**Version:** 2.0 | **Last updated:** April 2026
+
+---
+
+## Table of Contents
+
+1. [System Overview](#1-system-overview)
+2. [Architecture](#2-architecture)
+3. [Database Schema](#3-database-schema)
+4. [Authentication & Access Control](#4-authentication--access-control)
+5. [Client Portal](#5-client-portal)
+6. [Admin Dashboard](#6-admin-dashboard)
+7. [Stripe Billing](#7-stripe-billing)
+8. [Email Notifications](#8-email-notifications)
+9. [Support Time System](#9-support-time-system)
+10. [Change Request Lifecycle](#10-change-request-lifecycle)
+11. [API Reference](#11-api-reference)
+12. [Cron Jobs](#12-cron-jobs)
+13. [Environment Variables](#13-environment-variables)
+14. [Deployment](#14-deployment)
+
+---
+
+## 1. System Overview
+
+RushHosting is a white-label hosting management portal with two sides:
+
+- **Client portal** — clients view their site status, manage billing, and submit change requests
+- **Admin dashboard** — the agency manages all clients, sites, revenue, requests, plans, and onboarding
+
+The system is built with Next.js App Router, backed by Supabase (auth + database) and Stripe (billing). Client websites are managed externally and deployed on Vercel — RushHosting is the management layer, not the hosting environment itself.
+
+---
+
+## 2. Architecture
+
+```
+Browser
+  ↓ HTTPS
+Vercel (Next.js App Router)
+  ├── Server Components — fetch data server-side, no client roundtrips
+  ├── API Routes — all business logic; called by client components and Stripe
+  └── Middleware (proxy.ts) — auth guard, role-based redirects
+        ↓
+Supabase
+  ├── Auth — email/password, session cookies, auth triggers
+  └── Database (PostgreSQL) — RLS enforces per-user data isolation
+        ↓
+Stripe
+  └── Subscriptions, checkout, customer portal, webhooks, promo codes
+        ↓
+SMTP (rushhosting.au mail server)
+  └── Transactional email via nodemailer
+```
+
+### Key conventions
+
+- **Server components** fetch data directly from Supabase; interactive UI is extracted to `"use client"` components
+- **Admin routes** use `createSupabaseAdminClient()` (bypasses RLS) after a server-side role check
+- **Client routes** use `createSupabaseServerClient()` — subject to RLS
+- **All API responses** follow `{ ok: boolean, data?: T, error?: { code, message } }`
+- Stripe webhooks are the **source of truth** for subscription state — the database mirrors Stripe, not the other way around
+
+---
+
+## 3. Database Schema
+
+### `profiles`
+Created automatically on signup via a Supabase auth trigger. Extends `auth.users`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | Matches `auth.users.id` |
+| `full_name` | text | From signup form |
+| `role` | enum | `admin` or `client` (default: `client`) |
+| `company_name` | text | Optional |
+| `phone` | text | Optional |
+| `address_line1` | text | Optional |
+| `address_line2` | text | Optional |
+| `city` | text | Optional |
+| `state` | text | AU state/territory |
+| `postcode` | text | Optional |
+| `created_at` | timestamptz | Auto |
+
+### `subscriptions`
+Mirrors Stripe subscription state. One row per client.
+
+| Column | Type | Notes |
+|---|---|---|
+| `owner_id` | uuid FK | → `profiles.id` |
+| `stripe_customer_id` | text | Unique |
+| `stripe_subscription_id` | text | Unique |
+| `stripe_price_id` | text | Active price ID |
+| `plan_name` | text | Display name |
+| `status` | text | `active`, `trialing`, `past_due`, `cancelled`, `incomplete` |
+| `amount_aud` | integer | Cents |
+| `current_period_end` | timestamptz | Next billing date |
+| `cancel_at_period_end` | boolean | |
+| `backup_addon_stripe_item_id` | text | Set when backup add-on is active |
+| `lumpsum_minutes_total` | integer | Support bucket (minutes) |
+| `lumpsum_minutes_used` | integer | |
+| `weekly_minutes_total` | integer | Weekly recurring bucket (minutes) |
+| `weekly_minutes_used` | integer | |
+| `weekly_reset_at` | timestamptz | Last Monday reset timestamp |
+
+### `sites`
+One row per hosted website. Admin-managed.
+
+| Column | Type | Notes |
+|---|---|---|
+| `owner_id` | uuid FK | → `profiles.id` |
+| `domain` | text | e.g. `example.com.au` |
+| `status` | enum | `active`, `pending`, `suspended`, `cancelled` |
+| `plan_name` | text | |
+| `hosting_username` | text | Hosting panel username |
+| `hosting_password` | text | Encrypted at rest |
+
+### `update_requests`
+Client-submitted change requests.
+
+| Column | Type | Notes |
+|---|---|---|
+| `owner_id` | uuid FK | → `profiles.id` |
+| `title` | text | Required |
+| `description` | text | Optional |
+| `priority` | enum | `urgent`, `high`, `medium`, `low` |
+| `status` | enum | `open`, `in_progress`, `quoted`, `accepted`, `done_pending_review`, `resolved`, `closed` |
+| `admin_notes` | text | Visible to client after work is done |
+| `quoted_minutes` | integer | Time estimate set by admin |
+| `quoted_at` | timestamptz | |
+| `accepted_at` | timestamptz | |
+| `done_at` | timestamptz | |
+
+### `onboarding_links`
+Time-limited signup links generated by admin.
+
+| Column | Type | Notes |
+|---|---|---|
+| `token` | text | URL-safe random string |
+| `minimum_plan` | text | Optional plan gate (e.g. `basic`) |
+| `custom_plan_id` | uuid FK | Optional — locks to a specific custom plan |
+| `expires_at` | timestamptz | |
+| `used_at` | timestamptz | Set on first use |
+
+### `custom_plans`
+Admin-created plans with their own Stripe products/prices.
+
+| Column | Type | Notes |
+|---|---|---|
+| `name` | text | |
+| `description` | text | |
+| `price_aud` | integer | Cents |
+| `features` | text[] | Feature list |
+| `stripe_product_id` | text | Created by app |
+| `stripe_price_id` | text | Created by app |
+| `created_for` | uuid FK | Optional — targeted to a specific client |
+| `lumpsum_minutes` | integer | |
+| `weekly_minutes` | integer | |
+
+### `standard_plan_stripe`
+Maps standard plan IDs to their Stripe price IDs (populated by the Sync button in Admin → Plans).
+
+| Column | Type | Notes |
+|---|---|---|
+| `plan_id` | text PK | `hosting`, `basic`, `advanced` |
+| `stripe_product_id` | text | |
+| `stripe_price_id` | text | |
+| `synced_at` | timestamptz | |
+
+### `promo_codes`
+Stripe coupons/promotion codes created from the admin panel.
+
+| Column | Type | Notes |
+|---|---|---|
+| `name` | text | Display name |
+| `code` | text | The promo code string (e.g. `LAUNCH20`) |
+| `stripe_coupon_id` | text | |
+| `stripe_promo_id` | text | |
+| `percent_off` | integer | Null if fixed amount |
+| `amount_off_aud` | integer | Cents. Null if percentage |
+| `max_redemptions` | integer | Optional cap |
+| `expires_at` | timestamptz | Optional |
+
+### `heartbeat`
+Single-row table bumped daily by the Vercel cron to keep the Supabase free-tier database active.
+
+---
+
+## 4. Authentication & Access Control
+
+### Signup flow
+Signup requires a valid onboarding token issued by the admin. Without a token, `/signup` redirects to `/login`. Tokens can optionally enforce a minimum plan or lock to a specific custom plan.
+
+### Roles
+| Role | How to set | Access |
+|---|---|---|
+| `client` | Default on signup | `/dashboard`, `/updates`, `/billing`, `/settings` |
+| `admin` | Manual SQL update | All client routes + all `/admin/*` routes |
+
+To promote an account to admin:
+```sql
+UPDATE profiles SET role = 'admin' WHERE id = '<uuid>';
+```
+
+### Middleware (`proxy.ts`)
+Runs on every request. Unauthenticated users are redirected to `/login`. Users with `role = client` accessing `/admin/*` routes are redirected to `/dashboard`. The role is read from the database on each request.
+
+### Session management
+Supabase handles sessions via HTTP-only cookies. The server client reads the session cookie; the browser client is used only for auth actions (login, signup, sign out).
+
+---
+
+## 5. Client Portal
+
+### My Site — `/dashboard`
+The client's landing page. Shows:
+- Domain name, plan name, renewal date
+- Site status badge (active / pending / suspended)
+- Monthly cost
+- Open request count with link to Updates
+- Empty state with CTA if no site has been provisioned yet
+
+### Updates — `/updates`
+Manages change requests and displays support time.
+
+**Time bucket bars** — shows remaining lump sum hours and weekly hours as progress bars. Bars turn amber when under 20% remaining.
+
+**New request form** — toggled by "New request" button. Fields:
+- Title (required)
+- Description (optional)
+- Priority: Low / Medium / High / Urgent
+
+Submitting requires at least some time bucket balance. Hosting-only plan clients see a "no support included" message instead of the form.
+
+**Request cards** — each request shows title, status, priority, age, and quoted time. Expandable to show description and admin notes. Action buttons appear based on status:
+- `quoted` → **Accept quote** button
+- `done_pending_review` → **Confirm complete** button (triggers time deduction + request deletion + completion email)
+
+### Billing — `/billing`
+
+**No subscription:** Shows plan cards (Hosting Only, Basic, Advanced) with pricing and features. Onboarding links with a minimum-plan gate hide plans below the threshold.
+
+**Active subscription:** Shows plan name, AUD price, next billing date, cancellation status. "Manage billing" opens the Stripe Customer Portal for payment method updates, invoice history, and cancellation.
+
+**Plan change:** Clients on Basic or Advanced can upgrade/downgrade. The app handles the Stripe subscription item update immediately with pro-rata credit.
+
+**Managed Backup add-on:** Toggle on/off on the billing page. Adds $5/month AUD as a separate subscription item.
+
+### Settings — `/settings`
+- Update profile: full name, phone, address (line 1, line 2, city, state, postcode)
+- Change password via Supabase auth
+
+---
+
+## 6. Admin Dashboard
+
+### Master Feed — `/admin`
+Overview of all active sites with status badges. Highlights sites in `pending` status that need provisioning action. System-level alerts for unhealthy subscription states.
+
+### Requests — `/admin/requests`
+FIFO queue (oldest first) of all client change requests across all clients.
+
+Each card shows:
+- Client email, request title, status, priority, age, quoted time
+- Expandable panel with:
+  - **Set quote** — enter minutes, click to set quote (transitions request to `quoted` status and notifies client by email)
+  - **Admin notes textarea** — optional message to the client
+  - **Mark work done** — transitions to `done_pending_review`, sends "ready for review" email to client (BCC to admin)
+  - **Awaiting customer** badge when in `done_pending_review`
+
+Archived (resolved/closed) requests appear in a collapsed section below.
+
+### Revenue — `/admin/revenue`
+- MRR (monthly recurring revenue) from active subscriptions
+- Active subscriber count and plan breakdown
+- Australian financial year totals (Jul 1 – Jun 30)
+- Per-client subscription table with plan, amount, and join date
+
+### Clients — `/admin/clients`
+Divided into two tabs: **Active** (subscribed) and **Not subscribed**.
+
+Each active client row shows:
+- Name, email, plan, join date
+- Remaining support time (lump sum + weekly)
+- **Edit time buckets** (clock icon) — opens a modal to set lump sum hours and weekly hours for that client
+
+The time bucket modal is only shown for active subscribers.
+
+### Sites — `/admin/sites`
+All site records. Admin can:
+- Mark a site as **active** (triggers "site live" email to client, BCC to admin)
+- **Send credentials** — enter the hosting password and send a credentials email to the client (BCC to admin)
+
+### Onboarding — `/admin/onboarding`
+Generate signup links for new clients.
+
+Options:
+- **Minimum plan** — client must choose this plan or higher to complete signup
+- **Custom plan lock** — link is locked to a specific custom plan; client skips plan selection
+
+Links are time-limited (24 hours by default). Copy the link and send it to the client. Used + expired links are listed below the form for reference.
+
+### Custom Plans — `/admin/plans`
+
+Two sections:
+
+**Standard Plans** — Sync button creates the three standard Stripe products/prices and stores the IDs in the database. Status indicators show whether each plan is synced.
+
+**Custom Plans** — Create bespoke plans for individual clients. Each plan creates a Stripe product and recurring price. Fields:
+- Name, description, features list
+- Price (AUD/month)
+- Client (optional — link to a specific client's profile)
+- Lump sum support hours
+- Weekly support hours
+
+### Promo Codes — `/admin/promo`
+Create and manage Stripe promotion codes.
+
+Fields:
+- Code string (e.g. `LAUNCH20`)
+- Discount type: percentage off or fixed AUD off
+- Max redemptions (optional)
+- Expiry date (optional)
+
+Active codes are listed with their Stripe ID, discount, and redemption count. Codes can be deleted (deactivates the Stripe coupon).
+
+---
+
+## 7. Stripe Billing
+
+### Subscription creation
+1. Client clicks Subscribe → `POST /api/stripe/checkout`
+2. Server creates a Stripe Checkout session with the selected price ID, AUD currency, GST tax rate, and success/cancel URLs
+3. Client completes payment on Stripe-hosted checkout
+4. Stripe fires `checkout.session.completed` → webhook handler upserts the subscription row and sets initial time buckets
+
+### Plan changes
+1. Client selects new plan → `POST /api/stripe/subscription/change`
+2. Server retrieves the current subscription item, swaps to the new price ID immediately
+3. Stripe calculates pro-rata credit automatically
+4. Plan change email sent to client (BCC to admin)
+
+### Customer Portal
+`POST /api/stripe/portal` creates a Stripe Billing Portal session. Clients can:
+- View invoice history
+- Update payment method
+- Cancel subscription
+
+### Webhooks — `/api/webhooks/stripe`
+All webhook requests are verified using `STRIPE_WEBHOOK_SECRET` before processing.
+
+| Event | Action |
+|---|---|
+| `checkout.session.completed` | Upsert subscription; set initial time buckets based on plan |
+| `customer.subscription.updated` | Update status, amount, billing date, price ID; update `weekly_minutes_total` |
+| `customer.subscription.deleted` | Set status to `cancelled` |
+| `invoice.payment_failed` | Set status to `past_due` |
+| `invoice.paid` | Send branded receipt email to customer |
+
+### Managed Backup add-on
+`POST /api/stripe/addon` with `action: "enable"` or `action: "disable"`.
+- Enable: adds `STRIPE_BACKUP_PRICE_ID` as a new subscription item
+- Disable: deletes the subscription item
+- The `backup_addon_stripe_item_id` column tracks the active item ID
+
+---
+
+## 8. Email Notifications
+
+All email sends from `noreply@rushhosting.au` via SMTP. `ADMIN_EMAIL` (your Gmail) receives a silent BCC on all customer-facing notifications.
+
+| Trigger | Route | Recipient | BCC |
+|---|---|---|---|
+| Payment received (`invoice.paid`) | Stripe webhook | Customer | — |
+| Plan changed | `/api/stripe/subscription/change` | Customer | Admin |
+| Work ready for review (admin marks done) | `/api/admin/requests/[id]/done` | Customer | Admin |
+| Request completed (customer confirms) | `/api/requests/[id]/complete` | Customer | Admin |
+| Site activated | `/api/admin/sites/[siteId]` | Customer | Admin |
+| Credentials sent | `/api/admin/sites/[siteId]/send-credentials` | Customer | Admin |
+| New client signup | `/api/setup/domain` | Admin only | — |
+| User deleted | `/api/admin/clients/[userId]` | Admin only | — |
+
+### Email templates (all dark-themed HTML)
+- **Invoice receipt** — amount, line items, period dates, GST note, link to Stripe PDF
+- **Plan changed** — old plan vs new plan, pro-rata note
+- **Request ready** — request title, admin notes, "Review & confirm" button linking to `/updates`
+- **Request completed** — title, description, admin notes, time charged, remaining bucket balances
+- **Site live** — domain confirmation
+- **Hosting credentials** — panel URL, username, temporary password, nameserver instructions
+- **New signup alert** — customer email + domain
+- **User deletion** — account details, backup status, data export attachment
+
+---
+
+## 9. Support Time System
+
+### Allocation per plan
+| Plan | Lump sum | Weekly |
+|---|---|---|
+| Hosting Only | None | None |
+| Basic Website | 40 hours | 1 hour/week |
+| Advanced Website | 80 hours | 2 hours/week |
+| Custom plans | Admin-configured | Admin-configured |
+
+### How it works
+- **Lump sum** is allocated once at subscription creation and drawn down over the life of the subscription
+- **Weekly bucket** resets every Monday 00:00 UTC — implemented as a lazy reset checked on every data load
+- **Deduction order:** lump sum is consumed first; once exhausted, weekly bucket is used for the remainder
+- Admin can manually override either bucket value for any active subscriber via Admin → Clients
+
+### Weekly reset logic
+On every read of bucket data (`lib/time-buckets.ts → getSubscriptionBuckets`), if `weekly_reset_at < getMostRecentMonday()`, the weekly bucket is reset: `weekly_minutes_used = 0`, `weekly_reset_at = <current Monday>`. No cron job required.
+
+### Plan upgrades
+When a client upgrades (`customer.subscription.updated`), `weekly_minutes_total` is updated to match the new plan. The lump sum is intentionally preserved — it is not reset or re-allocated on plan change.
+
+---
+
+## 10. Change Request Lifecycle
+
+```
+Client submits (open)
+    ↓
+Admin reviews — optionally sets a time quote → quoted
+    ↓
+Client accepts quote → accepted
+    ↓
+Admin completes work → done_pending_review
+    (email sent to client; BCC to admin)
+    ↓
+Client confirms completion → [hard deleted]
+    (time deducted; completion email sent to client BCC admin)
+```
+
+Requests can also be moved directly from `open` or `in_progress` to `done_pending_review` without quoting — the quote step is optional.
+
+Resolved/closed requests (e.g. manually closed by admin) appear in the archived section of the admin queue and the client's Updates page but cannot be interacted with.
+
+**Hard delete on completion:** When the client confirms completion, the request row is permanently deleted from the database. The completion email serves as the only record.
+
+---
+
+## 11. API Reference
+
+### Client-facing
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/requests` | Returns client's active requests + bucket balances |
+| POST | `/api/requests` | Submit a new change request |
+| POST | `/api/requests/[id]/accept` | Accept a quoted request |
+| POST | `/api/requests/[id]/complete` | Confirm completion (deducts time, hard-deletes) |
+| POST | `/api/stripe/checkout` | Create Stripe Checkout session |
+| POST | `/api/stripe/portal` | Create Stripe Customer Portal session |
+| POST | `/api/stripe/subscription/change` | Upgrade or downgrade plan |
+| POST | `/api/stripe/addon` | Enable or disable Managed Backup |
+| POST | `/api/setup/domain` | Register domain for new client |
+| GET/PUT | `/api/profile` | Get or update profile fields |
+
+### Admin-facing
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/admin/requests` | List all requests (FIFO) with owner emails |
+| POST | `/api/admin/requests/[id]/quote` | Set time quote on a request |
+| POST | `/api/admin/requests/[id]/done` | Mark work done, notify client |
+| PATCH | `/api/admin/clients/[userId]/buckets` | Override time bucket totals |
+| DELETE | `/api/admin/clients/[userId]` | Delete client (Stripe cancel + DB purge + export email) |
+| PATCH | `/api/admin/sites/[siteId]` | Mark site active |
+| POST | `/api/admin/sites/[siteId]/send-credentials` | Send hosting credentials to client |
+| GET/POST | `/api/admin/onboarding` | List or create onboarding links |
+| POST | `/api/admin/sync-plans` | Sync standard plans to Stripe |
+| GET/POST | `/api/admin/custom-plans` | List or create custom plans |
+| GET/POST | `/api/admin/promo` | List or create promo codes |
+| DELETE | `/api/admin/promo/[id]` | Delete promo code |
+
+### System
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/webhooks/stripe` | Stripe webhook handler (signature-verified) |
+| GET | `/api/cron/heartbeat` | Daily DB write to prevent Supabase suspension (bearer-token protected) |
+
+---
+
+## 12. Cron Jobs
+
+### Daily heartbeat (`vercel.json`)
+- **Schedule:** `0 8 * * *` (08:00 UTC daily)
+- **Route:** `GET /api/cron/heartbeat`
+- **Auth:** `Authorization: Bearer <CRON_SECRET>`
+- **Purpose:** Updates `heartbeat.last_at` to keep Supabase free-tier database active (suspends after 7 days of inactivity)
+- **Required env var:** `CRON_SECRET`
+
+---
+
+## 13. Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Service role key — never exposed to client |
+| `STRIPE_SECRET_KEY` | Yes | `sk_test_` or `sk_live_` |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Yes | `pk_test_` or `pk_live_` |
+| `STRIPE_WEBHOOK_SECRET` | Yes | `whsec_` from Stripe webhook endpoint |
+| `STRIPE_GST_TAX_RATE_ID` | Recommended | `txr_` — 10% inclusive AU GST |
+| `STRIPE_BACKUP_PRICE_ID` | For backup feature | `price_` for $5/month add-on |
+| `NEXT_PUBLIC_APP_URL` | Yes | e.g. `https://rushhosting.au` |
+| `SMTP_HOST` | Yes | Mail server hostname |
+| `SMTP_PORT` | No | Default: `465` |
+| `SMTP_USER` | Yes | e.g. `noreply@rushhosting.au` |
+| `SMTP_PASS` | Yes | SMTP password |
+| `EMAIL_FROM` | Yes | e.g. `RushHosting <noreply@rushhosting.au>` |
+| `ADMIN_EMAIL` | Yes | Gmail — BCC on all transactional emails |
+| `BACKUP_NOTIFICATION_EMAIL` | Yes | Gmail — receives deletion export emails |
+| `CRON_SECRET` | Yes | Bearer token for heartbeat cron |
+
+---
+
+## 14. Deployment
+
+See [DEPLOY.md](DEPLOY.md) for the full Vercel deployment guide.
+
+See [STRIPE_SETUP.md](STRIPE_SETUP.md) for the Stripe sandbox-to-live setup guide.
+
+### Database migrations
+Run all files in `supabase/migrations/` in numeric order via the Supabase SQL Editor.
+
+| File | Purpose |
+|---|---|
+| `001_initial_schema.sql` | Core tables, RLS policies, auth trigger |
+| `002_profile_contact_fields.sql` | Phone and address columns on profiles |
+| `003_rls_is_admin_fix.sql` | Fix recursive RLS policy on profiles |
+| `004_onboarding_links.sql` | Onboarding link token system |
+| `005_custom_plans.sql` | Custom plans table |
+| `006_standard_plan_stripe.sql` | Standard plan → Stripe ID mapping table |
+| `007_sites_hosting_password.sql` | Hosting password column on sites |
+| `008_backup_addon.sql` | Backup add-on columns on subscriptions |
+| `009_subscriptions_owner_unique.sql` | Unique constraint on owner_id |
+| `010_time_buckets.sql` | Support time bucket columns + request lifecycle columns |
+| `011_heartbeat.sql` | Heartbeat table for Supabase keep-alive |
