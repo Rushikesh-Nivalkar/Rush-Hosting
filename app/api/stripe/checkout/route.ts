@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient, createSupabaseAdminClient } from "@/lib/supabase/supabase-server";
 import { stripe } from "@/lib/stripe/stripe-helpers";
-import { PLANS, PLAN_ORDER, getPlanRank, type PlanId } from "@/constants/plans";
+import { PLANS, getPlanRank, type PlanId } from "@/constants/plans";
 
 const VALID_PLAN_IDS = Object.values(PLANS).map((p) => p.id);
 

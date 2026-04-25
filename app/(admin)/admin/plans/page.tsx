@@ -5,7 +5,7 @@ import { GlassCard } from "@/components/shared/GlassCard";
 import { PlanForm } from "./PlanForm";
 import { formatAUD } from "@/lib/format";
 import { Package, CheckCircle, User, Zap, Loader2, RefreshCw, Copy } from "lucide-react";
-import { PLANS, PLAN_ORDER } from "@/constants/plans";
+import { PLANS } from "@/constants/plans";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

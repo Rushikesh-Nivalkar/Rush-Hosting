@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { Loader2, Save, CheckCircle, AlertCircle, CreditCard } from "lucide-react";
 import { GlassCard } from "@/components/shared/GlassCard";
-import { PLANS, type PlanId } from "@/constants/plans";
+import { PLANS } from "@/constants/plans";
 import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────

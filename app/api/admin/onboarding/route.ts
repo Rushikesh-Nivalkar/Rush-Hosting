@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
 
 // ── GET /api/admin/onboarding — list recent links ─────────────────────────────
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {

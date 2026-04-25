@@ -14,9 +14,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
-  LayoutGrid,
   Inbox,
   TrendingUp,
   Users,
@@ -24,7 +23,6 @@ import {
   CreditCard,
   Settings,
   LogOut,
-  ChevronDown,
   Zap,
   Tag,
   Link2,

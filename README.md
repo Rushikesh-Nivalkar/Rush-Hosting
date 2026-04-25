@@ -1,41 +1,63 @@
-<<<<<<< HEAD
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RushHosting
 
-## Getting Started
+A white-label hosting management portal for an Australian web agency. Clients self-serve status, billing, and change requests. The admin manages all accounts, revenue, and site provisioning from a single dashboard.
 
-First, run the development server:
+## Tech Stack
+
+| Layer | Choice |
+|---|---|
+| Framework | Next.js (App Router, server components) |
+| Auth + DB | Supabase (RLS, auth triggers) |
+| Payments | Stripe AUD (subscriptions, webhooks, customer portal) |
+| Email | Nodemailer via SMTP |
+| Styling | Tailwind CSS v4 + CSS custom properties |
+| Deployment | Vercel |
+
+## Local Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Create `.env.local` with the variables listed below, then open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server only) |
+| `STRIPE_SECRET_KEY` | Stripe secret key (`sk_test_` / `sk_live_`) |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret (`whsec_`) |
+| `NEXT_PUBLIC_APP_URL` | Full app URL (e.g. `https://rushhosting.au`) |
+| `SMTP_HOST` | SMTP server hostname |
+| `SMTP_PORT` | SMTP port (default: `465`) |
+| `SMTP_USER` | SMTP login (e.g. `noreply@rushhosting.au`) |
+| `SMTP_PASS` | SMTP password |
+| `EMAIL_FROM` | Sender display name + address |
+| `ADMIN_EMAIL` | Admin Gmail — receives BCC on all transactional emails |
+| `BACKUP_NOTIFICATION_EMAIL` | Receives user deletion export emails |
+| `CRON_SECRET` | Secret token for the daily heartbeat cron |
 
-## Learn More
+## Stripe Webhook Events
 
-To learn more about Next.js, take a look at the following resources:
+Register `https://yourdomain/api/webhooks/stripe` in Stripe Dashboard with:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `checkout.session.completed`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+- `invoice.payment_failed`
+- `invoice.paid`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Database Migrations
 
-## Deploy on Vercel
+All migrations live in `supabase/migrations/`. Run them in order in the Supabase SQL Editor.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Promote Yourself to Admin
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-=======
-# Rush-Hosting
-Hosting Reseller website
->>>>>>> ac92733f88dd39fcc65eea8f4ca7c61f790be1cd
+```sql
+UPDATE profiles SET role = 'admin' WHERE id = '<your-supabase-user-uuid>';
+```

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/supabase-server";
 import { GlassCard } from "@/components/shared/GlassCard";
 import { SiteStatusBadge } from "@/components/shared/Badges";
-import { Globe, Calendar, CreditCard, AlertCircle } from "lucide-react";
+import { Globe, Calendar, CreditCard } from "lucide-react";
 import { formatAUD } from "@/lib/stripe/stripe-helpers";
 import type { SiteStatus, SubscriptionStatus } from "@/lib/supabase/database.types";
 

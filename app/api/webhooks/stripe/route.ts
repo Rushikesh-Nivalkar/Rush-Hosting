@@ -146,7 +146,6 @@ export async function POST(req: NextRequest) {
         const toEmail = invoice.customer_email;
         if (!toEmail) break;
 
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://rushhosting.au";
         const { subject, html } = invoicePaidEmail({
           invoiceNumber: invoice.number ?? `INV-${invoice.id.slice(-8).toUpperCase()}`,
           date: new Date(invoice.created * 1000).toLocaleDateString("en-AU", {
