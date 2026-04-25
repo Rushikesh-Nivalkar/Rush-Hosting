@@ -21,7 +21,9 @@ const STATUS_MAP: Partial<Record<string, string>> = {
 async function subRow(sub: Stripe.Subscription, db: any, userId?: string) {
   const priceItem = sub.items.data[0];
   const priceId = priceItem?.price.id ?? null;
-  const nextBilling = new Date(sub.current_period_end * 1000).toISOString();
+  // In Stripe API ≥2026-03-25.dahlia, current_period_end lives on the item, not the subscription root
+  const periodEnd = priceItem?.current_period_end ?? sub.billing_cycle_anchor;
+  const nextBilling = new Date(periodEnd * 1000).toISOString();
 
   let planName = "Unknown Plan";
   if (priceId) {
